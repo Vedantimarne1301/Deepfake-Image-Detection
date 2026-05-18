@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DeepTrace — Deepfake Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #080b10;
+      --surface:  #0e1320;
+      --border:   #1e2840;
+      --accent:   #00e5ff;
+      --danger:   #ff3b5c;
+      --safe:     #00e676;
+      --muted:    #4a5568;
+      --text:     #e2e8f0;
+      --mono:     'Space Mono', monospace;
+      --sans:     'Syne', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grid noise bg ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      position: relative; z-index: 1;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    .logo {
+      font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px;
+      color: var(--accent);
+    }
+    .logo span { color: var(--text); font-weight: 400; }
+    .badge {
+      font-family: var(--mono); font-size: .7rem;
+      background: rgba(0,229,255,.08);
+      border: 1px solid rgba(0,229,255,.2);
+      color: var(--accent); padding: 4px 10px; border-radius: 4px;
+    }
+
+    /* ── Main layout ── */
+    main {
+      position: relative; z-index: 1;
+      max-width: 1100px; margin: 0 auto;
+      padding: 48px 24px;
+      display: grid; gap: 40px;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 800;
+      line-height: 1.1; letter-spacing: -1px;
+    }
+    h1 em { font-style: normal; color: var(--accent); }
+    .subtitle {
+      font-family: var(--mono); font-size: .8rem;
+      color: var(--muted); margin-top: 12px; letter-spacing: .05em;
+    }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 56px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .25s, background .25s;
+      position: relative; overflow: hidden;
+    }
+    .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(0,229,255,.04); }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .upload-icon {
+      font-size: 3rem; margin-bottom: 16px;
+      filter: drop-shadow(0 0 12px rgba(0,229,255,.4));
+    }
+    .upload-zone p { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+    .upload-zone strong { color: var(--text); font-size: 1.1rem; display: block; margin-bottom: 4px; }
+
+    /* ── Preview + result row ── */
+    .result-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 640px) { .result-row { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-size: .75rem;
+      color: var(--muted); letter-spacing: .1em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-header .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 6px var(--accent);
+    }
+    .card-body { padding: 0; }
+    .card-body img {
+      width: 100%; display: block;
+      object-fit: contain; max-height: 320px;
+      background: #0a0d14;
+    }
+
+    /* ── Verdict panel ── */
+    .verdict {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px;
+      display: none;
+    }
+    .verdict.show { display: block; }
+
+    .verdict-label {
+      font-size: 3.5rem; font-weight: 800; letter-spacing: -2px;
+      line-height: 1;
+    }
+    .verdict-label.fake { color: var(--danger); text-shadow: 0 0 30px rgba(255,59,92,.35); }
+    .verdict-label.real { color: var(--safe);   text-shadow: 0 0 30px rgba(0,230,118,.35); }
+
+    .confidence-bar {
+      margin: 20px 0;
+      height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%; border-radius: 3px;
+      transition: width .8s cubic-bezier(.16,1,.3,1);
+    }
+    .confidence-fill.fake { background: linear-gradient(90deg, #ff3b5c, #ff6b8a); }
+    .confidence-fill.real { background: linear-gradient(90deg, #00e676, #69f0ae); }
+
+    .meta-row {
+      display: flex; gap: 24px; margin-top: 24px; flex-wrap: wrap;
+    }
+    .meta-item {
+      flex: 1; min-width: 120px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .meta-item label {
+      display: block; font-family: var(--mono);
+      font-size: .65rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px;
+    }
+    .meta-item span { font-size: 1.1rem; font-weight: 600; }
+
+    /* ── Loader ── */
+    .loader {
+      display: none; text-align: center;
+      padding: 40px;
+    }
+    .loader.show { display: block; }
+    .spinner {
+      width: 44px; height: 44px; margin: 0 auto 16px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader p { font-family: var(--mono); font-size: .8rem; color: var(--muted); }
+
+    /* ── Analyze btn ── */
+    .analyze-btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 32px; border-radius: 10px;
+      background: var(--accent); color: #000;
+      font-family: var(--sans); font-size: 1rem; font-weight: 800;
+      border: none; cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+      box-shadow: 0 0 24px rgba(0,229,255,.25);
+    }
+    .analyze-btn:hover { transform: translateY(-2px); box-shadow: 0 0 40px rgba(0,229,255,.4); }
+    .analyze-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+    .reset-btn {
+      padding: 14px 20px; border-radius: 10px;
+      background: transparent; color: var(--muted);
+      font-family: var(--sans); font-size: .9rem;
+      border: 1px solid var(--border); cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .reset-btn:hover { color: var(--text); border-color: var(--text); }
+
+    /* ── Preview thumb ── */
+    #preview-section { display: none; }
+    #preview-section.show { display: grid; }
+
+    /* ── Info bar ── */
+    .info-bar {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      font-family: var(--mono); font-size: .7rem; color: var(--muted);
+    }
+    .info-bar span { display: flex; align-items: center; gap: 6px; }
+    .info-bar span::before {
+      content: ''; width: 6px; height: 6px;
+      border-radius: 50%; background: currentColor;
+    }
+
+    /* ── Error toast ── */
+    .error-toast {
+      display: none;
+      padding: 14px 20px; border-radius: 10px;
+      background: rgba(255,59,92,.1); border: 1px solid rgba(255,59,92,.3);
+      color: var(--danger); font-family: var(--mono); font-size: .8rem;
+    }
+    .error-toast.show { display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Deep<span>Trace</span></div>
+  <div class="badge">CNN + Grad-CAM · v1.0</div>
+</header>
+
+<main>
+  <div>
+    <h1>Detect <em>Deepfakes</em><br/>with AI Explainability</h1>
+    <p class="subtitle">// MobileNetV2 · OpenCV face detection · Gradient-weighted CAM</p>
+  </div>
+
+  <!-- Upload zone -->
+  <div class="upload-zone" id="dropzone">
+    <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp"/>
+    <div class="upload-icon">🎭</div>
+    <strong>Drop a face image here</strong>
+    <p>or click to browse · JPG / PNG / WEBP · max 16 MB</p>
+  </div>
+
+  <!-- Selected file info + analyze button -->
+  <div class="btn-row" id="btn-row" style="display:none">
+    <button class="analyze-btn" id="analyzeBtn">
+      <span>⚡</span> Analyze Image
+    </button>
+    <button class="reset-btn" id="resetBtn">✕ Reset</button>
+    <div class="info-bar" id="infoBar"></div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-toast" id="errorToast"></div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <p>Running inference…</p>
+  </div>
+
+  <!-- Result images -->
+  <div class="result-row" id="preview-section">
+    <div class="card">
+      <div class="card-header"><div class="dot"></div>Input (annotated)</div>
+      <div class="card-body"><img id="origImg" src="" alt="Original"/></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="dot" style="background:#ff6b8a;box-shadow:0 0 6px #ff3b5c"></div>Grad-CAM Heatmap</div>
+      <div class="card-body"><img id="camImg" src="" alt="Grad-CAM"/></div>
+    </div>
+  </div>
+
+  <!-- Verdict -->
+  <div class="verdict" id="verdictPanel">
+    <div class="verdict-label" id="verdictLabel">—</div>
+    <div style="font-family:var(--mono);font-size:.8rem;color:var(--muted);margin-top:6px" id="verdictSub"></div>
+    <div class="confidence-bar">
+      <div class="confidence-fill" id="confFill" style="width:0%"></div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-item">
+        <label>Confidence</label>
+        <span id="confVal">—</span>
+      </div>
+      <div class="meta-item">
+        <label>Face Detected</label>
+        <span id="faceVal">—</span>
+      </div>
+      <div class="meta-item">
+        <label>Model</label>
+        <span>MobileNetV2</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const dropzone   = document.getElementById('dropzone');
+  const fileInput  = document.getElementById('fileInput');
+  const btnRow     = document.getElementById('btn-row');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const resetBtn   = document.getElementById('resetBtn');
+  const loader     = document.getElementById('loader');
+  const errorToast = document.getElementById('errorToast');
+  const previewSec = document.getElementById('preview-section');
+  const verdictPanel = document.getElementById('verdictPanel');
+  const infoBar    = document.getElementById('infoBar');
+
+  let selectedFile = null;
+
+  // Drag & drop
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  function handleFile(f) {
+    selectedFile = f;
+    const kb = (f.size / 1024).toFixed(0);
+    infoBar.innerHTML = `
+      <span>${f.name}</span>
+      <span>${kb} KB</span>
+      <span>${f.type.split('/')[1].toUpperCase()}</span>
+    `;
+    btnRow.style.display = 'flex';
+    hideError(); hideResults();
+  }
+
+  analyzeBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    analyzeBtn.disabled = true;
+    loader.classList.add('show');
+    hideError(); hideResults();
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+
+    try {
+      const res  = await fetch('/predict', { method: 'POST', body: fd });
+      const data = await res.json();
+      loader.classList.remove('show');
+
+      if (data.error) { showError(data.error); return; }
+
+      showResults(data);
+    } catch (err) {
+      loader.classList.remove('show');
+      showError('Could not reach the server. Is app.py running?');
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    selectedFile = null;
+    fileInput.value = '';
+    btnRow.style.display = 'none';
+    hideResults(); hideError();
+    loader.classList.remove('show');
+    analyzeBtn.disabled = false;
+  });
+
+  function showResults(d) {
+    document.getElementById('origImg').src = 'data:image/jpeg;base64,' + d.original_b64;
+    document.getElementById('camImg').src  = 'data:image/jpeg;base64,' + d.gradcam_b64;
+    previewSec.classList.add('show');
+
+    const lbl   = document.getElementById('verdictLabel');
+    const sub   = document.getElementById('verdictSub');
+    const fill  = document.getElementById('confFill');
+    const confV = document.getElementById('confVal');
+    const faceV = document.getElementById('faceVal');
+
+    lbl.textContent = d.label;
+    lbl.className = 'verdict-label ' + d.label.toLowerCase();
+    sub.textContent = d.label === 'FAKE'
+      ? '⚠ This image shows signs of AI manipulation.'
+      : '✓ No significant manipulation artifacts detected.';
+
+    fill.style.width = d.confidence + '%';
+    fill.className   = 'confidence-fill ' + d.label.toLowerCase();
+    confV.textContent = d.confidence + '%';
+    faceV.textContent = d.face_detected ? '✓ Yes' : '✗ No (full image used)';
+
+    verdictPanel.classList.add('show');
+  }
+
+  function hideResults() {
+    previewSec.classList.remove('show');
+    verdictPanel.classList.remove('show');
+  }
+  function showError(msg) {
+    errorToast.textContent = '⚠ ' + msg;
+    errorToast.classList.add('show');
+  }
+  function hideError() { errorToast.classList.remove('show'); }
+</script>
+</body>
+</html>
