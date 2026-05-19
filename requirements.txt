@@ -1,7 +1,8 @@
 torch
 torchvision
-opencv-python
+opencv-python-headless
 numpy
 Pillow
 flask
 werkzeug
+gunicorn
