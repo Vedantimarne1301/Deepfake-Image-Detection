@@ -1,12 +1,9 @@
-<<<<<<< HEAD
----
 title: Deepfake Image Detection
 emoji: 🚀
 colorFrom: gray
 colorTo: pink
 sdk: docker
 pinned: false
-license: mit
 ---
 
 Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
@@ -15,7 +12,6 @@ Check out the configuration reference at https://huggingface.co/docs/hub/spaces-
 
 A deep learning-based deepfake image detection system using **MobileNetV2 Transfer Learning** and **Grad-CAM explainability**, deployed as a **Flask web application**.
 
-> Developed by **Vedanti Marne** | TY BTech. AI & DS | AISSMS IOIT, Pune | AY 2024-2025
 
 ---
 
@@ -297,17 +293,3 @@ PyTorch backward hooks capture gradients from the last Conv2D layer. These gradi
 | Laptop overheating | Normal — place on hard flat surface, keep vents clear |
 
 ---
-
-## 📄 License
-
-This project is for academic purposes — TY BTech Mini Project, AISSMS IOIT, Pune.
-
----
-
-## 🙏 Acknowledgements
-
-- **Dr. D. S. Zingade** — Project Guide, AI & DS Department, AISSMS IOIT
-- **Dr. R. A. Jamadar** — Head of Department, AI & DS, AISSMS IOIT
-- **Kaggle** — 140k Real and Fake Faces dataset by xhlulu
-- **PyTorch Team** — MobileNetV2 pretrained weights
->>>>>>> fb0ddf6 (readme added)
