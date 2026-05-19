@@ -77,14 +77,6 @@ def get_model():
     )
     net.load_state_dict(checkpoint["model_state_dict"])
 
-    # Freeze all parameters — no gradients stored = less memory
-    for param in net.parameters():
-        param.requires_grad = False
-
-    # Quantize linear layers — reduces model RAM from ~150MB to ~40MB
-    net = torch.quantization.quantize_dynamic(
-        net, {nn.Linear}, dtype=torch.qint8
-    )
 
     net.eval()
     _model = net

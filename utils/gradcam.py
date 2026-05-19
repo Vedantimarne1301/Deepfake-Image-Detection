@@ -44,42 +44,31 @@ def _find_last_conv(model: torch.nn.Module) -> torch.nn.Module:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-def make_gradcam_heatmap(
-    img_tensor: torch.Tensor,   # shape (1, 3, H, W), normalised, on device
-    model: torch.nn.Module,
-    device: torch.device,
-) -> np.ndarray:
-    """
-    Compute a Grad-CAM heatmap.
-
-    Returns
-    -------
-    heatmap : np.ndarray  shape (H, W), float32 in [0, 1]
-    """
+def make_gradcam_heatmap(img_tensor, model, device):
     model.eval()
     target_layer = _find_last_conv(model)
     hook = _GradCAMHook(target_layer)
 
-    # Forward pass
-    img_tensor = img_tensor.to(device).requires_grad_(False)
-    logit = model(img_tensor).squeeze()          # scalar logit
+    # Re-enable gradients specifically for Grad-CAM
+    img_tensor = img_tensor.to(device)
 
-    # Backward pass w.r.t. the prediction score
-    model.zero_grad()
-    logit.backward()
+    # Forward pass WITH gradient tracking
+    with torch.enable_grad():
+        img_tensor.requires_grad_(False)
+        logit = model(img_tensor).squeeze()
+        model.zero_grad()
+        logit.backward()
 
     hook.remove()
 
-    # GAP over spatial dims -> channel weights
-    grads       = hook.gradients   # (1, C, h, w)
-    activations = hook.activations # (1, C, h, w)
+    grads       = hook.gradients
+    activations = hook.activations
 
-    weights = grads.mean(dim=(2, 3), keepdim=True)  # (1, C, 1, 1)
-    cam     = (weights * activations).sum(dim=1, keepdim=True)  # (1,1,h,w)
+    weights = grads.mean(dim=(2, 3), keepdim=True)
+    cam     = (weights * activations).sum(dim=1, keepdim=True)
     cam     = F.relu(cam)
 
-    # Normalise
-    cam = cam.squeeze().cpu().numpy()   # (h, w)
+    cam = cam.squeeze().cpu().detach().numpy()
     if cam.max() > 0:
         cam = cam / cam.max()
 
