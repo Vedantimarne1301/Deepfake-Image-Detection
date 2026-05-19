@@ -10,6 +10,9 @@ pinned: false
 
 Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
 =======
+---
+Live on: https://vedantimarne13-deepfake-image-detection.hf.space
+---
 # 🎭 DeepTrace — Deepfake Image Detector
 
 A deep learning-based deepfake image detection system using **MobileNetV2 Transfer Learning** and **Grad-CAM explainability**, deployed as a **Flask web application**.
